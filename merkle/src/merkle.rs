@@ -6,6 +6,7 @@ use alloc::vec::Vec;
 use core::iter::FromIterator;
 use core::marker::PhantomData;
 use core::ops;
+use rayon::prelude::*;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
@@ -41,7 +42,7 @@ use std::fmt::Debug;
 ///
 /// TODO: Ord
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct MerkleTree<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> {
+pub struct MerkleTree<T: Ord + Clone + AsRef<[u8]> + Sync + Send, A: Algorithm<T>> {
     data: Vec<T>,
     leafs: usize,
     height: usize,
@@ -49,7 +50,9 @@ pub struct MerkleTree<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> {
     _a: PhantomData<A>,
 }
 
-impl<T: Ord + Clone + Debug + Default + AsRef<[u8]>, A: Algorithm<T>> MerkleTree<T, A> {
+impl<T: Ord + Clone + Debug + Default + AsRef<[u8]> + Sync + Send, A: Algorithm<T>>
+    MerkleTree<T, A>
+{
     /// Creates new merkle from a sequence of hashes.
     pub fn new<I: IntoIterator<Item = T>>(data: I) -> MerkleTree<T, A> {
         Self::from_iter(data)
@@ -66,55 +69,67 @@ impl<T: Ord + Clone + Debug + Default + AsRef<[u8]>, A: Algorithm<T>> MerkleTree
     }
 
     fn build(&mut self) {
-        let mut a = A::default();
         let mut width = self.leafs;
 
         // build tree
-        let mut i: usize = 0;
-        let mut j: usize = width;
+        let mut layer_start: usize = 0;
+        let mut layer_end: usize = width;
         while width > 1 {
             // if there is odd num of elements, fill in a NULL.
             if width & 1 == 1 {
                 self.data.push(Self::null_node());
                 width += 1;
-                j += 1;
+                layer_end += 1;
             }
 
-            // next shift
-            while i < j {
-                a.reset();
-                // If the right child is not NULL, the left child is ensured to be not NULL.
-                let h = if self.data[i + 1] != Self::null_node() {
-                    a.node(self.data[i].clone(), self.data[i + 1].clone())
-                } else {
-                    // If a child is NULL, the parent should be a linking node to the actual node hash.
-                    let parent_index = self.data.len();
-                    if self.data[i] == Self::null_node() {
-                        // If both are NULL, the left child must be a linking node.
-                        let linked_to = self.link_map.remove(&i).unwrap();
-                        self.link_map.insert(parent_index, linked_to);
-                        Self::null_node()
+            let layer: Vec<_> = (layer_start..layer_end)
+                .into_par_iter()
+                .step_by(2)
+                .map(|i| {
+                    let mut a = A::default();
+                    // If the right child is not NULL, the left child is ensured to be not NULL.
+                    let mut link_map_update = None;
+                    let h = if self.data[i + 1] != Self::null_node() {
+                        a.node(self.data[i].clone(), self.data[i + 1].clone())
                     } else {
-                        match self.link_map.get(&(i + 1)) {
-                            // Right child is linked to a hash, so we just compute the parent hash.
-                            Some(index) => {
-                                assert_ne!(self.data[*index], Self::null_node());
-                                a.node(self.data[i].clone(), self.data[*index].clone())
-                            }
-                            // Right child is NULL, so link the parent to the left child which has a hash stored.
-                            None => {
-                                self.link_map.insert(parent_index, i);
-                                Self::null_node()
+                        // If a child is NULL, the parent should be a linking node to the actual node hash.
+                        let parent_index = (i - layer_start) / 2 + layer_end;
+                        if self.data[i] == Self::null_node() {
+                            // If both are NULL, the left child must be a linking node.
+                            let linked_to = *self.link_map.get(&i).unwrap();
+                            link_map_update = Some((parent_index, linked_to, Some(i)));
+                            Self::null_node()
+                        } else {
+                            match self.link_map.get(&(i + 1)) {
+                                // Right child is linked to a hash, so we just compute the parent hash.
+                                Some(index) => {
+                                    assert_ne!(self.data[*index], Self::null_node());
+                                    a.node(self.data[i].clone(), self.data[*index].clone())
+                                }
+                                // Right child is NULL, so link the parent to the left child which has a hash stored.
+                                None => {
+                                    link_map_update = Some((parent_index, i, None));
+                                    Self::null_node()
+                                }
                             }
                         }
+                    };
+                    (h, link_map_update)
+                })
+                .collect();
+            for (node, maybe_link_map_update) in layer {
+                self.data.push(node);
+                if let Some((from, to, maybe_remove)) = maybe_link_map_update {
+                    self.link_map.insert(from, to);
+                    if let Some(remove) = maybe_remove {
+                        self.link_map.remove(&remove);
                     }
-                };
-                self.data.push(h);
-                i += 2;
+                }
             }
 
+            layer_start = layer_end;
             width >>= 1;
-            j += width;
+            layer_end += width;
         }
     }
 
@@ -216,7 +231,7 @@ impl<T: Ord + Clone + Debug + Default + AsRef<[u8]>, A: Algorithm<T>> MerkleTree
     }
 }
 
-impl<T: Ord + Clone + Debug + Default + AsRef<[u8]>, A: Algorithm<T>> FromIterator<T>
+impl<T: Ord + Clone + Debug + Default + AsRef<[u8]> + Sync + Send, A: Algorithm<T>> FromIterator<T>
     for MerkleTree<T, A>
 {
     /// Creates new merkle tree from an iterator over hashable objects.
@@ -257,7 +272,7 @@ impl<T: Ord + Clone + Debug + Default + AsRef<[u8]>, A: Algorithm<T>> FromIterat
     }
 }
 
-impl<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> ops::Deref for MerkleTree<T, A> {
+impl<T: Ord + Clone + AsRef<[u8]> + Sync + Send, A: Algorithm<T>> ops::Deref for MerkleTree<T, A> {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
