@@ -1,11 +1,11 @@
 extern crate alloc;
 
+use crate::hash::{Algorithm, Hashable};
+use crate::proof::Proof;
 use alloc::vec::Vec;
 use core::iter::FromIterator;
 use core::marker::PhantomData;
 use core::ops;
-use crate::hash::{Hashable, Algorithm};
-use crate::proof::Proof;
 
 /// Merkle Tree.
 ///
@@ -93,6 +93,11 @@ impl<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> MerkleTree<T, A> {
 
     /// Generate merkle tree inclusion proof for leaf `i`
     pub fn gen_proof(&self, i: usize) -> Proof<T> {
+        if self.leafs == 1 {
+            assert_eq!(i, 0);
+            return Proof::new(vec![self.root()], vec![true]);
+        }
+
         assert!(i < self.leafs); // i in [0 .. self.leafs)
 
         let mut lemma: Vec<T> = Vec::with_capacity(self.height + 1); // path + root
@@ -188,7 +193,7 @@ impl<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> FromIterator<T> for MerkleTr
         let pow = next_pow2(leafs);
         let size = 2 * pow - 1;
 
-        assert!(leafs > 1);
+        // assert!(leafs > 1);
 
         let mut mt: MerkleTree<T, A> = MerkleTree {
             data,

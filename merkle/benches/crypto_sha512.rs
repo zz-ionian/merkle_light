@@ -1,16 +1,15 @@
 //! cargo bench --features "crypto_bench" --verbose
 #![cfg(feature = "crypto_bench")]
-
 #![feature(test)]
 #![feature(rand)]
 #![feature(crypto)]
 
 mod hash512;
 
-extern crate test;
-extern crate rand;
 extern crate crypto;
 extern crate merkle_light;
+extern crate rand;
+extern crate test;
 
 use crypto::digest::Digest;
 use crypto::sha2::Sha512;
@@ -113,9 +112,11 @@ fn bench_crypto_sha512_from_data_5_proof(b: &mut Bencher) {
     let values = tree_5();
     let tree: MerkleTree<Hash512, A> = MerkleTree::from_iter(values.clone());
 
-    b.iter(|| for i in 0..values.len() {
-        let proof = tree.gen_proof(i);
-        test::black_box(proof);
+    b.iter(|| {
+        for i in 0..values.len() {
+            let proof = tree.gen_proof(i);
+            test::black_box(proof);
+        }
     });
 }
 
@@ -127,8 +128,10 @@ fn bench_crypto_sha512_from_data_5_proof_check(b: &mut Bencher) {
         .map(|i| tree.gen_proof(i))
         .collect::<Vec<_>>();
 
-    b.iter(|| for proof in &proofs {
-        test::black_box(proof.validate::<A>());
+    b.iter(|| {
+        for proof in &proofs {
+            test::black_box(proof.validate::<A>());
+        }
     });
 }
 
@@ -143,9 +146,11 @@ fn bench_crypto_sha512_from_data_160_proof(b: &mut Bencher) {
     let values = tree_160();
     let tree: MerkleTree<Hash512, A> = MerkleTree::from_iter(values.clone());
 
-    b.iter(|| for i in 0..values.len() {
-        let proof = tree.gen_proof(i);
-        test::black_box(proof);
+    b.iter(|| {
+        for i in 0..values.len() {
+            let proof = tree.gen_proof(i);
+            test::black_box(proof);
+        }
     });
 }
 
@@ -157,7 +162,9 @@ fn bench_crypto_sha512_from_data_160_proof_check(b: &mut Bencher) {
         .map(|i| tree.gen_proof(i))
         .collect::<Vec<_>>();
 
-    b.iter(|| for proof in &proofs {
-        test::black_box(proof.validate::<A>());
+    b.iter(|| {
+        for proof in &proofs {
+            test::black_box(proof.validate::<A>());
+        }
     });
 }

@@ -4,13 +4,13 @@
 extern crate crypto;
 extern crate merkle_light;
 
+use crypto::digest::Digest;
+use crypto::sha3::{Sha3, Sha3Mode};
+use merkle_light::hash::Algorithm;
+use merkle_light::merkle::MerkleTree;
 use std::fmt;
 use std::hash::Hasher;
 use std::iter::FromIterator;
-use merkle_light::hash::Algorithm;
-use merkle_light::merkle::MerkleTree;
-use crypto::sha3::{Sha3, Sha3Mode};
-use crypto::digest::Digest;
 
 #[derive(Clone)]
 struct CryptoChainCoreAlgorithm(Sha3);

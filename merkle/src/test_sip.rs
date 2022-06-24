@@ -1,9 +1,9 @@
 #![cfg(test)]
 
-use crate::hash::{Hashable, Algorithm};
-use crate::merkle::MerkleTree;
-use crate::merkle::next_pow2;
+use crate::hash::{Algorithm, Hashable};
 use crate::merkle::log2_pow2;
+use crate::merkle::next_pow2;
+use crate::merkle::MerkleTree;
 use crate::test_item::Item;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;

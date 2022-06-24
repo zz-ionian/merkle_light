@@ -59,9 +59,9 @@ fn hash_field(index: usize, f: &syn::Field) -> quote::Tokens {
     loop {
         match ty {
             syn::Ty::Path(_, ref path) => {
-                path.segments.first().expect(
-                    "there must be at least 1 segment",
-                );
+                path.segments
+                    .first()
+                    .expect("there must be at least 1 segment");
                 break;
             }
             syn::Ty::Rptr(_, bty) => {

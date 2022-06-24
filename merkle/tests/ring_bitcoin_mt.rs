@@ -1,8 +1,8 @@
 #![cfg(test)]
 #![cfg(feature = "bitcoin")]
 
-extern crate ring;
 extern crate merkle_light;
+extern crate ring;
 
 use merkle_light::hash::{Algorithm, Hashable};
 use merkle_light::merkle::MerkleTree;

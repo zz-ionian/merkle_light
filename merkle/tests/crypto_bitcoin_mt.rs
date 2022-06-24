@@ -4,13 +4,13 @@
 extern crate crypto;
 extern crate merkle_light;
 
+use crypto::digest::Digest;
+use crypto::sha2::Sha256;
+use merkle_light::hash::{Algorithm, Hashable};
+use merkle_light::merkle::MerkleTree;
 use std::fmt;
 use std::hash::Hasher;
 use std::iter::FromIterator;
-use merkle_light::hash::{Algorithm, Hashable};
-use merkle_light::merkle::MerkleTree;
-use crypto::sha2::Sha256;
-use crypto::digest::Digest;
 
 #[derive(Clone)]
 struct CryptoBitcoinAlgorithm(Sha256);

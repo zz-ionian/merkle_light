@@ -1,7 +1,7 @@
 extern crate alloc;
 
-use alloc::vec::Vec;
 use crate::hash::Algorithm;
+use alloc::vec::Vec;
 
 /// Merkle tree inclusion proof for data element, for which item = Leaf(Hash(Data Item)).
 ///
@@ -21,8 +21,12 @@ pub struct Proof<T: Eq + Clone + AsRef<[u8]>> {
 impl<T: Eq + Clone + AsRef<[u8]>> Proof<T> {
     /// Creates new MT inclusion proof
     pub fn new(hash: Vec<T>, path: Vec<bool>) -> Proof<T> {
-        assert!(hash.len() > 2);
-        assert_eq!(hash.len() - 2, path.len());
+        if hash.len() > 2 {
+            assert_eq!(hash.len() - 2, path.len());
+        } else {
+            assert_eq!(hash.len(), 1);
+            assert_eq!(path, vec![true]);
+        }
         Proof { lemma: hash, path }
     }
 
@@ -39,6 +43,12 @@ impl<T: Eq + Clone + AsRef<[u8]>> Proof<T> {
     /// Verifies MT inclusion proof
     pub fn validate<A: Algorithm<T>>(&self) -> bool {
         let size = self.lemma.len();
+
+        // Special case for a single node.
+        if size == 1 && self.path == vec![true] {
+            return true;
+        }
+
         if size < 2 {
             return false;
         }

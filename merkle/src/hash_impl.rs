@@ -1,11 +1,11 @@
 extern crate alloc;
 
-use alloc::vec::Vec;
+use crate::hash::Hashable;
 use alloc::string::String;
+use alloc::vec::Vec;
 use core::hash::Hasher;
 use core::mem;
 use core::slice;
-use crate::hash::Hashable;
 
 macro_rules! impl_write {
     ($(($ty:ident, $meth:ident),)*) => {$(
@@ -124,7 +124,7 @@ macro_rules! last_type {
     ($a:ident, $($rest_a:ident,)+) => { last_type!($($rest_a,)+) };
 }
 
-impl_hash_tuple!{}
+impl_hash_tuple! {}
 impl_hash_tuple! { A }
 impl_hash_tuple! { A B }
 impl_hash_tuple! { A B C }
