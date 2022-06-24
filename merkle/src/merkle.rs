@@ -6,6 +6,8 @@ use alloc::vec::Vec;
 use core::iter::FromIterator;
 use core::marker::PhantomData;
 use core::ops;
+use std::collections::BTreeMap;
+use std::fmt::Debug;
 
 /// Merkle Tree.
 ///
@@ -43,10 +45,11 @@ pub struct MerkleTree<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> {
     data: Vec<T>,
     leafs: usize,
     height: usize,
+    link_map: BTreeMap<usize, usize>,
     _a: PhantomData<A>,
 }
 
-impl<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> MerkleTree<T, A> {
+impl<T: Ord + Clone + Debug + Default + AsRef<[u8]>, A: Algorithm<T>> MerkleTree<T, A> {
     /// Creates new merkle from a sequence of hashes.
     pub fn new<I: IntoIterator<Item = T>>(data: I) -> MerkleTree<T, A> {
         Self::from_iter(data)
@@ -70,10 +73,9 @@ impl<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> MerkleTree<T, A> {
         let mut i: usize = 0;
         let mut j: usize = width;
         while width > 1 {
-            // if there is odd num of elements, fill in to the even
+            // if there is odd num of elements, fill in a NULL.
             if width & 1 == 1 {
-                let he = self.data[self.len() - 1].clone();
-                self.data.push(he);
+                self.data.push(Self::null_node());
                 width += 1;
                 j += 1;
             }
@@ -81,7 +83,32 @@ impl<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> MerkleTree<T, A> {
             // next shift
             while i < j {
                 a.reset();
-                let h = a.node(self.data[i].clone(), self.data[i + 1].clone());
+                // If the right child is not NULL, the left child is ensured to be not NULL.
+                let h = if self.data[i + 1] != Self::null_node() {
+                    a.node(self.data[i].clone(), self.data[i + 1].clone())
+                } else {
+                    // If a child is NULL, the parent should be a linking node to the actual node hash.
+                    let parent_index = self.data.len();
+                    if self.data[i] == Self::null_node() {
+                        // If both are NULL, the left child must be a linking node.
+                        let linked_to = self.link_map.remove(&i).unwrap();
+                        self.link_map.insert(parent_index, linked_to);
+                        Self::null_node()
+                    } else {
+                        match self.link_map.get(&(i + 1)) {
+                            // Right child is linked to a hash, so we just compute the parent hash.
+                            Some(index) => {
+                                assert_ne!(self.data[*index], Self::null_node());
+                                a.node(self.data[i].clone(), self.data[*index].clone())
+                            }
+                            // Right child is NULL, so link the parent to the left child which has a hash stored.
+                            None => {
+                                self.link_map.insert(parent_index, i);
+                                Self::null_node()
+                            }
+                        }
+                    }
+                };
                 self.data.push(h);
                 i += 2;
             }
@@ -95,7 +122,7 @@ impl<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> MerkleTree<T, A> {
     pub fn gen_proof(&self, i: usize) -> Proof<T> {
         if self.leafs == 1 {
             assert_eq!(i, 0);
-            return Proof::new(vec![self.root()], vec![true]);
+            return Proof::new(vec![self.root()], vec![]);
         }
 
         assert!(i < self.leafs); // i in [0 .. self.leafs)
@@ -114,14 +141,30 @@ impl<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> MerkleTree<T, A> {
 
         lemma.push(self.data[j].clone());
         while base + 1 < self.len() {
-            lemma.push(if j & 1 == 0 {
+            let proof_hash_index = if j & 1 == 0 {
                 // j is left
-                self.data[base + j + 1].clone()
+                let right_index = base + j + 1;
+                if self.data[right_index] == Self::null_node() {
+                    match self.link_map.get(&right_index) {
+                        // A link node, so the proof uses the linked hash.
+                        Some(index) => {
+                            assert_ne!(self.data[*index], Self::null_node());
+                            Some(*index)
+                        }
+                        // A NULL node, just skip.
+                        None => None,
+                    }
+                } else {
+                    Some(right_index)
+                }
             } else {
                 // j is right
-                self.data[base + j - 1].clone()
-            });
-            path.push(j & 1 == 0);
+                Some(base + j - 1)
+            };
+            if let Some(index) = proof_hash_index {
+                lemma.push(self.data[index].clone());
+                path.push(j & 1 == 0);
+            }
 
             base += width;
             width >>= 1;
@@ -167,9 +210,15 @@ impl<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> MerkleTree<T, A> {
     pub fn as_slice(&self) -> &[T] {
         self
     }
+
+    fn null_node() -> T {
+        T::default()
+    }
 }
 
-impl<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> FromIterator<T> for MerkleTree<T, A> {
+impl<T: Ord + Clone + Debug + Default + AsRef<[u8]>, A: Algorithm<T>> FromIterator<T>
+    for MerkleTree<T, A>
+{
     /// Creates new merkle tree from an iterator over hashable objects.
     fn from_iter<I: IntoIterator<Item = T>>(into: I) -> Self {
         let iter = into.into_iter();
@@ -199,6 +248,7 @@ impl<T: Ord + Clone + AsRef<[u8]>, A: Algorithm<T>> FromIterator<T> for MerkleTr
             data,
             leafs,
             height: log2_pow2(size + 1),
+            link_map: Default::default(),
             _a: PhantomData,
         };
 

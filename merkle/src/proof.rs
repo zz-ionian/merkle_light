@@ -25,7 +25,7 @@ impl<T: Eq + Clone + AsRef<[u8]>> Proof<T> {
             assert_eq!(hash.len() - 2, path.len());
         } else {
             assert_eq!(hash.len(), 1);
-            assert_eq!(path, vec![true]);
+            assert_eq!(path, vec![]);
         }
         Proof { lemma: hash, path }
     }
@@ -45,7 +45,7 @@ impl<T: Eq + Clone + AsRef<[u8]>> Proof<T> {
         let size = self.lemma.len();
 
         // Special case for a single node.
-        if size == 1 && self.path == vec![true] {
+        if size == 1 && self.path == vec![] {
             return true;
         }
 
